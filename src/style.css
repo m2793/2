@@ -1,0 +1,59 @@
+/* style.css */
+body {
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f4f4f4;
+}
+
+a {
+    color: #007BFF;
+    transition: color 0.3s ease;
+}
+
+a:hover {
+    color: #0056b3;
+}
+
+button {
+    transition: background-color 0.3s ease;
+}
+
+.card {
+    background-color: #fff;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 0.5rem;
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+h1,
+h2 {
+    line-height: 1.2;
+}
+
+p {
+    line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        color: #f4f4f4;
+        background-color: #333;
+    }
+
+    a {
+        color: #007BFF;
+    }
+
+    a:hover {
+        color: #0056b3;
+    }
+
+    .card {
+        background-color: #444;
+    }
+}    
