@@ -11,6 +11,7 @@ from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 from google.protobuf.json_format import MessageToDict
 import screen_brightness_control as sbcontrol
 import threading
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 CORS(app, origins="http://localhost:5173")  # 配置 CORS，允许来自 http://localhost:5173 的请求
@@ -42,6 +43,10 @@ class Gest(IntEnum):
     TWO_FINGER_CLOSED = 34
     PINCH_MAJOR = 35
     PINCH_MINOR = 36
+    
+    # Modified scroll gestures
+    SCROLL_UP = 14    # Binary: 01110 (Ring + Middle + Index fingers up)
+    SCROLL_DOWN = 15  # Binary: 01111 (Ring + Middle + Index + Pinky fingers up)
 
 # Multi-handedness Labels
 class HLabel(IntEnum):
@@ -86,8 +91,10 @@ class HandRecog:
         points = [[8,5,0],[12,9,0],[16,13,0],[20,17,0]]
         self.finger = 0
         self.finger = self.finger | 0 #thumb
+        print("\nAnalyzing finger positions:")
+        
+        # 检查其他手指
         for idx,point in enumerate(points):
-            
             dist = self.get_signed_dist(point[:2])
             dist2 = self.get_signed_dist(point[1:])
             
@@ -97,9 +104,18 @@ class HandRecog:
                 ratio = round(dist/0.01,1)
 
             self.finger = self.finger << 1
-            if ratio > 0.5 :
+            if ratio > 0.5:
                 self.finger = self.finger | 1
-    
+                if idx == 0:
+                    print("Index finger is up")
+                elif idx == 1:
+                    print("Middle finger is up")
+                elif idx == 2:
+                    print("Ring finger is up")
+                elif idx == 3:
+                    print("Pinky is up")
+                    
+        print(f"Final finger state: {bin(self.finger)} (decimal: {self.finger})")
 
     def get_gesture(self):
         if self.hand_result == None:
@@ -111,8 +127,15 @@ class HandRecog:
                 current_gesture = Gest.PINCH_MINOR
             else:
                 current_gesture = Gest.PINCH_MAJOR
-
-        elif Gest.FIRST2 == self.finger :
+        
+        # 检查滚动手势
+        elif self.finger == Gest.SCROLL_UP:  # 01110 (Ring + Middle + Index fingers up)
+            print("Detected SCROLL_UP gesture")
+            current_gesture = Gest.SCROLL_UP
+        elif self.finger == Gest.SCROLL_DOWN:  # 01111 (Ring + Middle + Index + Pinky fingers up)
+            print("Detected SCROLL_DOWN gesture")
+            current_gesture = Gest.SCROLL_DOWN
+        elif Gest.FIRST2 == self.finger:
             point = [[8,12],[5,9]]
             dist1 = self.get_dist(point[0])
             dist2 = self.get_dist(point[1])
@@ -124,9 +147,8 @@ class HandRecog:
                     current_gesture =  Gest.TWO_FINGER_CLOSED
                 else:
                     current_gesture =  Gest.MID
-            
         else:
-            current_gesture =  self.finger
+            current_gesture = self.finger
         
         if current_gesture == self.prev_gesture:
             self.frame_count += 1
@@ -135,11 +157,10 @@ class HandRecog:
 
         self.prev_gesture = current_gesture
 
-        if self.frame_count > 4 :
+        if self.frame_count > 4:
             self.ori_gesture = current_gesture
         return self.ori_gesture
 
-# Executes commands according to detected gestures
 class Controller:
     tx_old = 0
     ty_old = 0
@@ -171,7 +192,6 @@ class Controller:
     def scrollVertical():
         pyautogui.scroll(120 if Controller.pinchlv>0.0 else -120)
         
-    
     @staticmethod
     def scrollHorizontal():
         pyautogui.keyDown('shift')
@@ -215,9 +235,11 @@ class Controller:
         Controller.framecount = 0
 
     @staticmethod
-    def handle_controls(gesture, hand_result):  
+    def handle_controls(gesture, hand_result):
+        print(f"\nHandling gesture: {gesture} (binary: {bin(gesture)})")
+        
         x,y = None,None
-        if gesture != Gest.PALM :
+        if gesture != Gest.PALM:
             x,y = Controller.get_position(hand_result)
         
         # flag reset
@@ -237,7 +259,7 @@ class Controller:
             pyautogui.moveTo(x, y, duration = 0.1)
 
         elif gesture == Gest.FIST:
-            if not Controller.grabflag : 
+            if not Controller.grabflag:
                 Controller.grabflag = True
                 pyautogui.mouseDown(button = "left")
             pyautogui.moveTo(x, y, duration = 0.1)
@@ -254,10 +276,20 @@ class Controller:
             pyautogui.doubleClick()
             Controller.flag = False
 
+        # 修改滚动手势的处理
+        elif gesture == Gest.SCROLL_UP:  # Ring + Middle + Index fingers up
+            print("Executing scroll up")
+            pyautogui.scroll(120)
+
+        elif gesture == Gest.SCROLL_DOWN:  # Ring + Middle + Index + Pinky fingers up
+            print("Executing scroll down")
+            pyautogui.scroll(-120)
+
         elif gesture == Gest.PINCH_MINOR:
             if Controller.pinchminorflag == False:
                 Controller.pinch_control_init(hand_result)
                 Controller.pinchminorflag = True
+                
         elif gesture == Gest.PINCH_MAJOR:
             if Controller.pinchmajorflag == False:
                 Controller.pinch_control_init(hand_result)
